@@ -23,16 +23,16 @@ os.makedirs(IMAGES_DIR, exist_ok=True)
 @router.post("/v1/images/generations")
 async def image_generations(request: Request):
     body: dict[str, Any] = await request.json()
-    return await _create_image(body, edit=False)
+    return await _create_image(body, request, edit=False)
 
 
 @router.post("/v1/images/edits")
 async def image_edits(request: Request):
     body: dict[str, Any] = await request.json()
-    return await _create_image(body, edit=True)
+    return await _create_image(body, request, edit=True)
 
 
-async def _create_image(body: dict[str, Any], edit: bool) -> JSONResponse:
+async def _create_image(body: dict[str, Any], request: Request, edit: bool) -> JSONResponse:
     token = settings.chatgpt_access_token.strip()
     if not token:
         return JSONResponse(status_code=500, content={"error": {"message": "CHATGPT_ACCESS_TOKEN not configured"}})
@@ -98,8 +98,9 @@ async def _create_image(body: dict[str, Any], edit: bool) -> JSONResponse:
             # 直接是文件路径或外部 URL（不太可能走到这里）
             continue
 
-        # 构造本地访问 URL
-        local_url = f"http://localhost:{settings.port}/images/{filename}"
+        # Construct public URL: prefer PUBLIC_URL env, fallback to request host
+        base_url = settings.public_url.rstrip("/") if settings.public_url else str(request.base_url).rstrip("/")
+        local_url = f"{base_url}/images/{filename}"
         data.append({"url": local_url})
 
     if not data:

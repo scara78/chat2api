@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     port: int = 8700
     timeout: int = 600  # 秒
 
+    # Public base URL for generated image links (e.g. https://myapp.easypanel.host)
+    public_url: str = ""
+
     # Web 模式图片生成默认模型
     web_image_model: str = "gpt-5-5-thinking"
     # Web 模式 chat 默认模型
