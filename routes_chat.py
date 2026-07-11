@@ -1,4 +1,4 @@
-"""POST /v1/chat/completions — 通过 ChatGPT Web 端实现 Chat Completions。"""
+"""POST /v1/chat/completions — Chat Completions via ChatGPT Web."""
 
 import json
 import time
@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 
 from config import settings
 from http_client import build_session
+from token_manager import token_manager
 from web_fingerprint import WebFingerprint
 from web_proof import build_legacy_requirements_token, build_proof_token
 
@@ -18,10 +19,10 @@ router = APIRouter()
 
 @router.post("/v1/chat/completions")
 async def chat_completions(request: Request):
-    """通过 ChatGPT Web 端实现 OpenAI 兼容的 chat completions。"""
-    token = settings.chatgpt_access_token.strip()
-    if not token:
-        return JSONResponse(status_code=500, content={"error": {"message": "CHATGPT_ACCESS_TOKEN not configured"}})
+    try:
+        token = token_manager.get()
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": {"message": str(e)}})
 
     body: dict[str, Any] = await request.json()
     if "messages" not in body:
@@ -45,18 +46,13 @@ async def chat_completions(request: Request):
 
 
 async def _complete_chat(token: str, model: str, body: dict[str, Any]) -> JSONResponse:
-    """非流式 chat completion。"""
     fp = WebFingerprint()
     base = settings.chatgpt_base_url.rstrip("/")
 
     async with build_session() as session:
-        # 获取 requirements
         reqs = await _get_requirements(session, fp, base, token)
-
-        # 准备对话
         conduit = await _prepare_conversation(session, fp, base, token, model, reqs)
 
-        # 发起对话
         messages = body.get("messages", [])
         prompt = _messages_to_prompt(messages)
 
@@ -68,10 +64,7 @@ async def _complete_chat(token: str, model: str, body: dict[str, Any]) -> JSONRe
         if resp.status_code >= 400:
             return JSONResponse(status_code=resp.status_code, content={"error": {"message": f"upstream {resp.status_code}: {resp.text[:300]}"}})
 
-        # 解析完整响应
         content = _parse_chat_response(resp.text)
-
-        # 粗略估算 token
         prompt_tokens = len(prompt) // 4 + 1
         completion_tokens = len(content) // 4 + 1
 
@@ -86,19 +79,14 @@ async def _complete_chat(token: str, model: str, body: dict[str, Any]) -> JSONRe
 
 
 async def _stream_chat(token: str, model: str, body: dict[str, Any]):
-    """流式 chat completion — 先获取完整响应，再逐步输出给客户端。"""
     fp = WebFingerprint()
     base = settings.chatgpt_base_url.rstrip("/")
 
     try:
         async with build_session() as session:
-            # 获取 requirements
             reqs = await _get_requirements(session, fp, base, token)
-
-            # 准备对话
             conduit = await _prepare_conversation(session, fp, base, token, model, reqs)
 
-            # 发起对话
             messages = body.get("messages", [])
             prompt = _messages_to_prompt(messages)
 
@@ -113,8 +101,6 @@ async def _stream_chat(token: str, model: str, body: dict[str, Any]):
                 return
 
             chat_id = f"chatcmpl-{uuid.uuid4().hex[:24]}"
-
-            # 解析完整 SSE，收集所有增量内容
             last_content = ""
             chunks: list[str] = []
 
@@ -130,7 +116,6 @@ async def _stream_chat(token: str, model: str, body: dict[str, Any]):
                     last_content = new_content
                     chunks.append(delta)
 
-            # 逐 chunk 输出给客户端
             for delta in chunks:
                 chunk = {
                     "id": chat_id,
@@ -141,7 +126,6 @@ async def _stream_chat(token: str, model: str, body: dict[str, Any]):
                 }
                 yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
 
-            # finish
             finish_chunk = {
                 "id": chat_id,
                 "object": "chat.completion.chunk",
@@ -161,19 +145,12 @@ async def _stream_chat(token: str, model: str, body: dict[str, Any]):
 
 
 async def _get_requirements(session, fp: WebFingerprint, base: str, token: str) -> dict[str, str]:
-    """获取 chat requirements。"""
     path = "/backend-api/sentinel/chat-requirements"
     body = {"p": build_legacy_requirements_token(fp.user_agent)}
     headers = fp.base_headers(token, path)
     headers["Content-Type"] = "application/json"
 
-    # Debug: log token prefix and length
-    token_preview = token[:20] + "..." if len(token) > 20 else token
-    print(f"[DEBUG] token length={len(token)} prefix={token_preview}", flush=True)
-    print(f"[DEBUG] Authorization header={headers.get('Authorization', 'MISSING')[:40]}", flush=True)
-
     resp = await session.post(f"{base}{path}", json=body, headers=headers)
-    print(f"[DEBUG] requirements status={resp.status_code} body={resp.text[:300]}", flush=True)
     if resp.status_code >= 400:
         raise Exception(f"Requirements failed: {resp.status_code}: {resp.text[:200]}")
 
@@ -191,7 +168,6 @@ async def _get_requirements(session, fp: WebFingerprint, base: str, token: str) 
 
 
 async def _prepare_conversation(session, fp: WebFingerprint, base: str, token: str, model: str, reqs: dict[str, str]) -> str:
-    """准备对话获取 conduit token。"""
     path = "/backend-api/f/conversation/prepare"
     body = {
         "action": "next",
@@ -221,7 +197,6 @@ async def _prepare_conversation(session, fp: WebFingerprint, base: str, token: s
 
 
 def _build_conversation_body(model: str, prompt: str) -> dict[str, Any]:
-    """构造对话请求体。"""
     return {
         "action": "next",
         "fork_from_shared_post": False,
@@ -264,7 +239,6 @@ def _build_conversation_body(model: str, prompt: str) -> dict[str, Any]:
 
 
 def _messages_to_prompt(messages: list[dict]) -> str:
-    """将 OpenAI messages 格式转为单个 prompt 文本。"""
     parts = []
     for msg in messages:
         role = msg.get("role", "user")
@@ -283,7 +257,6 @@ def _messages_to_prompt(messages: list[dict]) -> str:
 
 
 def _parse_chat_response(sse_text: str) -> str:
-    """解析 ChatGPT Web SSE 响应，提取最终文本内容。"""
     last_content = ""
     for line in sse_text.split("\n"):
         if not line.startswith("data:"):
@@ -292,14 +265,12 @@ def _parse_chat_response(sse_text: str) -> str:
         if not payload or payload == "[DONE]":
             continue
         content = _extract_content_from_web_chunk(payload)
-        # 内容是累积的，取最长的那个
         if content and len(content) >= len(last_content):
             last_content = content
     return last_content
 
 
 def _extract_content_from_web_chunk(payload: str) -> str:
-    """从 ChatGPT Web SSE chunk 中提取文本内容。"""
     try:
         data = json.loads(payload)
     except json.JSONDecodeError:
@@ -308,7 +279,6 @@ def _extract_content_from_web_chunk(payload: str) -> str:
     if not isinstance(data, dict):
         return ""
 
-    # 新格式: {"v": {"message": {...}}} 或 {"p": "", "o": "add", "v": {"message": {...}}}
     msg = data.get("message")
     if not isinstance(msg, dict):
         v = data.get("v")
@@ -325,7 +295,6 @@ def _extract_content_from_web_chunk(payload: str) -> str:
     if not isinstance(content, dict):
         return ""
     parts = content.get("parts", [])
-    # 返回最后一个字符串 part（即使为空也返回，因为内容是累积的）
     for part in reversed(parts):
         if isinstance(part, str):
             return part

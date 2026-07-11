@@ -1,26 +1,20 @@
-"""应用配置，从环境变量 / .env 文件加载。"""
+"""Configurație aplicație."""
 
 from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    # ChatGPT Access Token（从 https://chatgpt.com/api/auth/session 获取）
+    # Token singur (backward compat)
     chatgpt_access_token: str = ""
+    # Multiple tokeni separați prin virgulă
+    chatgpt_access_tokens: str = ""
+
     chatgpt_base_url: str = "https://chatgpt.com"
-
-    # 出站代理（可选，支持 http/https/socks5）
     proxy_url: str = ""
-
-    # 服务
     port: int = 8700
-    timeout: int = 600  # 秒
-
-    # Public base URL for generated image links (e.g. https://myapp.easypanel.host)
+    timeout: int = 600
     public_url: str = ""
-
-    # Web 模式图片生成默认模型
     web_image_model: str = "gpt-5-5-thinking"
-    # Web 模式 chat 默认模型
     web_chat_model: str = "gpt-4o"
 
     class Config:
