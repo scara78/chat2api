@@ -13,8 +13,10 @@
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.httpsredirect import HTTPSRedirectMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from config import settings
 from routes_chat import router as chat_router
@@ -27,6 +29,20 @@ app = FastAPI(
     version="2.0.0",
     docs_url="/docs",
 )
+
+# Trust proxy headers from EasyPanel/nginx reverse proxy
+from starlette.middleware import Middleware
+from starlette.requests import Request as StarletteRequest
+
+@app.middleware("http")
+async def fix_forwarded_host(request: StarletteRequest, call_next):
+    # EasyPanel sends X-Forwarded-Host and X-Forwarded-Proto
+    forwarded_proto = request.headers.get("x-forwarded-proto")
+    forwarded_host = request.headers.get("x-forwarded-host") or request.headers.get("host")
+    if forwarded_proto and forwarded_host:
+        request.scope["scheme"] = forwarded_proto
+        request.scope["server"] = (forwarded_host.split(":")[0], 443 if forwarded_proto == "https" else 80)
+    return await call_next(request)
 
 # CORS
 app.add_middleware(
