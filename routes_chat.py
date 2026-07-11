@@ -167,7 +167,13 @@ async def _get_requirements(session, fp: WebFingerprint, base: str, token: str) 
     headers = fp.base_headers(token, path)
     headers["Content-Type"] = "application/json"
 
+    # Debug: log token prefix and length
+    token_preview = token[:20] + "..." if len(token) > 20 else token
+    print(f"[DEBUG] token length={len(token)} prefix={token_preview}", flush=True)
+    print(f"[DEBUG] Authorization header={headers.get('Authorization', 'MISSING')[:40]}", flush=True)
+
     resp = await session.post(f"{base}{path}", json=body, headers=headers)
+    print(f"[DEBUG] requirements status={resp.status_code} body={resp.text[:300]}", flush=True)
     if resp.status_code >= 400:
         raise Exception(f"Requirements failed: {resp.status_code}: {resp.text[:200]}")
 
