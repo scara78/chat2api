@@ -1,0 +1,21 @@
+# GPT Proxy — Docker Compose (optional, for local testing)
+
+services:
+  gpt-proxy:
+    build: .
+    ports:
+      - "8700:8700"
+    environment:
+      - CHATGPT_ACCESS_TOKEN=${CHATGPT_ACCESS_TOKEN}
+      - CHATGPT_BASE_URL=${CHATGPT_BASE_URL:-https://chatgpt.com}
+      - PROXY_URL=${PROXY_URL:-}
+      - PORT=${PORT:-8700}
+      - TIMEOUT=${TIMEOUT:-600}
+      - WEB_IMAGE_MODEL=${WEB_IMAGE_MODEL:-gpt-5-5-thinking}
+      - WEB_CHAT_MODEL=${WEB_CHAT_MODEL:-gpt-4o}
+    volumes:
+      - images_data:/app/images
+    restart: unless-stopped
+
+volumes:
+  images_data:
