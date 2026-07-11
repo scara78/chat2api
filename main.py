@@ -58,7 +58,13 @@ app.add_middleware(
 @app.get("/v1/health")
 async def health():
     has_token = bool(settings.chatgpt_access_token.strip())
-    return JSONResponse(content={"ok": has_token, "mode": "web_cookie", "has_token": has_token})
+    return JSONResponse(content={
+        "ok": has_token,
+        "mode": "web_cookie",
+        "has_token": has_token,
+        "public_url": settings.public_url or "(not set)",
+        "port": settings.port,
+    })
 
 
 # 路由
