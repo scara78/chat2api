@@ -90,65 +90,73 @@ async def _stream_chat(token: str, model: str, body: dict[str, Any]):
     fp = WebFingerprint()
     base = settings.chatgpt_base_url.rstrip("/")
 
-    async with build_session() as session:
-        # 获取 requirements
-        reqs = await _get_requirements(session, fp, base, token)
+    try:
+        async with build_session() as session:
+            # 获取 requirements
+            reqs = await _get_requirements(session, fp, base, token)
 
-        # 准备对话
-        conduit = await _prepare_conversation(session, fp, base, token, model, reqs)
+            # 准备对话
+            conduit = await _prepare_conversation(session, fp, base, token, model, reqs)
 
-        # 发起对话
-        messages = body.get("messages", [])
-        prompt = _messages_to_prompt(messages)
+            # 发起对话
+            messages = body.get("messages", [])
+            prompt = _messages_to_prompt(messages)
 
-        path = "/backend-api/f/conversation"
-        conv_body = _build_conversation_body(model, prompt)
-        headers = fp.image_headers(token, path, reqs["token"], reqs["proof_token"], reqs["so_token"], conduit=conduit, accept="text/event-stream")
+            path = "/backend-api/f/conversation"
+            conv_body = _build_conversation_body(model, prompt)
+            headers = fp.image_headers(token, path, reqs["token"], reqs["proof_token"], reqs["so_token"], conduit=conduit, accept="text/event-stream")
 
-        resp = await session.post(f"{base}{path}", json=conv_body, headers=headers)
-        if resp.status_code >= 400:
-            error_chunk = json.dumps({"error": {"message": f"upstream {resp.status_code}: {resp.text[:300]}"}})
-            yield f"data: {error_chunk}\n\n"
-            return
+            resp = await session.post(f"{base}{path}", json=conv_body, headers=headers)
+            if resp.status_code >= 400:
+                error_chunk = json.dumps({"error": {"message": f"upstream {resp.status_code}: {resp.text[:300]}"}})
+                yield f"data: {error_chunk}\n\n"
+                return
 
-        chat_id = f"chatcmpl-{uuid.uuid4().hex[:24]}"
+            chat_id = f"chatcmpl-{uuid.uuid4().hex[:24]}"
 
-        # 解析完整 SSE，收集所有增量内容
-        last_content = ""
-        chunks: list[str] = []
+            # 解析完整 SSE，收集所有增量内容
+            last_content = ""
+            chunks: list[str] = []
 
-        for line in resp.text.split("\n"):
-            if not line.startswith("data:"):
-                continue
-            payload = line[5:].strip()
-            if not payload or payload == "[DONE]":
-                continue
-            new_content = _extract_content_from_web_chunk(payload)
-            if new_content and len(new_content) > len(last_content):
-                delta = new_content[len(last_content):]
-                last_content = new_content
-                chunks.append(delta)
+            for line in resp.text.split("\n"):
+                if not line.startswith("data:"):
+                    continue
+                payload = line[5:].strip()
+                if not payload or payload == "[DONE]":
+                    continue
+                new_content = _extract_content_from_web_chunk(payload)
+                if new_content and len(new_content) > len(last_content):
+                    delta = new_content[len(last_content):]
+                    last_content = new_content
+                    chunks.append(delta)
 
-        # 逐 chunk 输出给客户端
-        for delta in chunks:
-            chunk = {
+            # 逐 chunk 输出给客户端
+            for delta in chunks:
+                chunk = {
+                    "id": chat_id,
+                    "object": "chat.completion.chunk",
+                    "created": int(time.time()),
+                    "model": model,
+                    "choices": [{"index": 0, "delta": {"content": delta}, "finish_reason": None}],
+                }
+                yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
+
+            # finish
+            finish_chunk = {
                 "id": chat_id,
                 "object": "chat.completion.chunk",
                 "created": int(time.time()),
                 "model": model,
-                "choices": [{"index": 0, "delta": {"content": delta}, "finish_reason": None}],
+                "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
             }
-            yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps(finish_chunk)}\n\n"
+            yield "data: [DONE]\n\n"
 
-        # finish
-        finish_chunk = {
-            "id": chat_id,
-            "object": "chat.completion.chunk",
-            "created": int(time.time()),
-            "model": model,
-            "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
-        }
-        yield f"data: {json.dumps(finish_chunk)}\n\n"
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        error_chunk = json.dumps({"error": {"message": str(e)}})
+        yield f"data: {error_chunk}\n\n"
         yield "data: [DONE]\n\n"
 
 
