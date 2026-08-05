@@ -23,14 +23,22 @@ async def _check_token(index: int, token: str) -> dict[str, Any]:
     body = {"p": build_legacy_requirements_token(fp.user_agent)}
     base = settings.chatgpt_base_url.rstrip("/")
 
+    token_hint = token[-4:] if len(token) >= 4 else token
+
     try:
         async with build_session() as session:
             response = await session.post(f"{base}{path}", json=body, headers=headers)
 
         if 200 <= response.status_code < 300:
-            return {"token_id": index + 1, "available": True, "status_code": response.status_code}
+            return {
+                "token_id": index + 1,
+                "token_hint": token_hint,
+                "available": True,
+                "status_code": response.status_code,
+            }
         return {
             "token_id": index + 1,
+            "token_hint": token_hint,
             "available": False,
             "status_code": response.status_code,
             "reason": "upstream_rejected_token",
@@ -38,6 +46,7 @@ async def _check_token(index: int, token: str) -> dict[str, Any]:
     except Exception:
         return {
             "token_id": index + 1,
+            "token_hint": token_hint,
             "available": False,
             "status_code": None,
             "reason": "connection_or_request_error",
