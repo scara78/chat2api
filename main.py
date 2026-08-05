@@ -10,6 +10,7 @@ from starlette.requests import Request as StarletteRequest
 from config import settings
 from routes_chat import router as chat_router
 from routes_images import router as images_router, IMAGES_DIR
+from routes_tokens import router as tokens_router
 from token_manager import token_manager
 
 app = FastAPI(
@@ -54,6 +55,7 @@ async def health():
 
 app.include_router(chat_router)
 app.include_router(images_router)
+app.include_router(tokens_router)
 app.mount("/images", StaticFiles(directory=IMAGES_DIR), name="images")
 
 

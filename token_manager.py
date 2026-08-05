@@ -40,5 +40,9 @@ class TokenManager:
     def count(self) -> int:
         return len(self._tokens)
 
+    def all(self) -> list[str]:
+        with self._lock:
+            return list(self._tokens)
+
 
 token_manager = TokenManager()
