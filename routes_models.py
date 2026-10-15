@@ -13,7 +13,7 @@ MODEL_CREATED = 1700000000
 def _model_ids() -> list[str]:
     ids: list[str] = []
     for raw in settings.web_models.split(","):
-        m = raw.strip()
+        m = raw.strip().strip("\"'").strip("[]").strip()
         if m and m not in ids:
             ids.append(m)
     return ids
