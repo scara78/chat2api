@@ -137,10 +137,8 @@ class WebImageClient:
         except Exception:
             raise Exception(f"Web prepare returned non-JSON: {resp.text[:320]}")
 
-        conduit = _extract_conduit_token(data)
-        if not conduit:
-            raise Exception(f"Web prepare missing conduit token: {resp.text[:400]}")
-        return conduit
+        # conduit_token 可能为 null；此时不带 X-Conduit-Token 头继续请求。
+        return _extract_conduit_token(data)
 
     async def _start_generation(self, session, reqs: dict[str, str], conduit: str, prompt: str, model: str, refs: list[dict]) -> tuple[str, list[str], list[str], list[str], str]:
         """发起图片生成对话。"""
