@@ -157,13 +157,17 @@ python -B test_client.py image        # 图片生成
 
 | 变量 | 说明 | 默认值 |
 |------|------|--------|
-| `CHATGPT_ACCESS_TOKEN` | Access Token（必填） | — |
-| `PROXY_URL` | 出站代理（必填） | — |
+| `CHATGPT_ACCESS_TOKEN` | 单个 Access Token | — |
+| `CHATGPT_ACCESS_TOKENS` | 多个 Access Token（逗号分隔，多账号轮询） | — |
+| `PROXY_URL` | 出站代理（可选，需能访问 chatgpt.com） | — |
 | `CHATGPT_BASE_URL` | ChatGPT 地址 | `https://chatgpt.com` |
 | `PORT` | 监听端口 | `8700` |
 | `TIMEOUT` | 请求超时（秒） | `600` |
-| `WEB_IMAGE_MODEL` | 图片生成模型 | `gpt-5-5-thinking` |
+| `PUBLIC_URL` | 返回图片 URL 使用的公开地址 | — |
+| `WEB_IMAGE_MODEL` | 图片生成模型（`auto` = 自动选择） | `auto` |
+| `WEB_IMAGE_MODEL_FALLBACKS` | 模型不可用时的降级列表 | `gpt-5-1-thinking,gpt-5-1,gpt-5-thinking,gpt-5,gpt-4o` |
 | `WEB_CHAT_MODEL` | 对话默认模型 | `gpt-4o` |
+| `WEB_MODELS` | `GET /v1/models` 返回的模型列表 | `gpt-4o,gpt-4o-mini,gpt-5,gpt-5-1,gpt-5-thinking,gpt-5-1-thinking,auto,dall-e-3` |
 
 ## 📁 项目结构
 

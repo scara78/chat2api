@@ -45,6 +45,23 @@ def test_health():
         print("  ✅ Token 已配置")
 
 
+def test_models():
+    """测试模型列表。"""
+    print("\n" + "=" * 60)
+    print("📋 测试 GET /v1/models")
+    print("=" * 60)
+    resp = httpx.get(f"{BASE_URL}/v1/models", timeout=30)
+    print(f"  状态码: {resp.status_code}")
+    if resp.status_code == 200:
+        data = resp.json()
+        ids = [m["id"] for m in data.get("data", [])]
+        print(f"  模型数: {len(ids)}")
+        print(f"  模型: {', '.join(ids)}")
+        print("  ✅ 通过")
+    else:
+        print(f"  ❌ 错误: {resp.text[:300]}")
+
+
 def test_chat():
     """测试非流式 Chat Completions。"""
     print("\n" + "=" * 60)
@@ -162,6 +179,7 @@ def main():
 
     tests = [
         ("health", test_health),
+        ("models", test_models),
         ("chat", test_chat),
         ("chat_stream", test_chat_stream),
         ("image", test_image),
@@ -172,7 +190,7 @@ def main():
         selected = sys.argv[1:]
         tests = [(name, fn) for name, fn in tests if name in selected]
         if not tests:
-            print(f"\n可用测试: health, chat, chat_stream, image")
+            print(f"\n可用测试: health, models, chat, chat_stream, image")
             sys.exit(1)
 
     for name, fn in tests:
