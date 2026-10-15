@@ -13,6 +13,8 @@ services:
       - PORT=${PORT:-8700}
       - TIMEOUT=${TIMEOUT:-600}
       - PUBLIC_URL=${PUBLIC_URL:-}
+      - OAI_DEVICE_ID=${OAI_DEVICE_ID:-}
+      - OAI_SESSION_ID=${OAI_SESSION_ID:-}
       - WEB_IMAGE_MODEL=${WEB_IMAGE_MODEL:-auto}
       - WEB_IMAGE_MODEL_FALLBACKS=${WEB_IMAGE_MODEL_FALLBACKS:-gpt-5-1-thinking,gpt-5-1,gpt-5-thinking,gpt-5,gpt-4o}
       - WEB_CHAT_MODEL=${WEB_CHAT_MODEL:-gpt-4o}

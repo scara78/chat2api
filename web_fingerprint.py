@@ -1,6 +1,43 @@
 """浏览器指纹模拟，用于 Web Cookie 模式。"""
 
+import json
+import os
 import uuid
+
+from config import settings
+
+# 设备指纹必须稳定：每次请求或每次重启都换 device_id 会触发
+# 上游 "Unusual activity has been detected from your device" 反滥用检测。
+_STATE_PATH = os.path.join(os.path.dirname(__file__), ".fingerprint.json")
+
+
+def _load_or_create_state() -> tuple[str, str]:
+    """加载持久化的 device_id / session_id，不存在则创建并写回。"""
+    device_id = settings.oai_device_id.strip()
+    session_id = settings.oai_session_id.strip()
+
+    if not device_id or not session_id:
+        try:
+            with open(_STATE_PATH, encoding="utf-8") as f:
+                data = json.load(f)
+            device_id = device_id or str(data.get("device_id") or "")
+            session_id = session_id or str(data.get("session_id") or "")
+        except (OSError, ValueError):
+            pass
+
+    device_id = device_id or str(uuid.uuid4())
+    session_id = session_id or str(uuid.uuid4())
+
+    try:
+        with open(_STATE_PATH, "w", encoding="utf-8") as f:
+            json.dump({"device_id": device_id, "session_id": session_id}, f)
+    except OSError:
+        pass
+
+    return device_id, session_id
+
+
+_PERSISTENT_DEVICE_ID, _PERSISTENT_SESSION_ID = _load_or_create_state()
 
 
 class WebFingerprint:
@@ -12,8 +49,8 @@ class WebFingerprint:
             "AppleWebKit/537.36 (KHTML, like Gecko) "
             "Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0"
         )
-        self.device_id = str(uuid.uuid4())
-        self.session_id = str(uuid.uuid4())
+        self.device_id = _PERSISTENT_DEVICE_ID
+        self.session_id = _PERSISTENT_SESSION_ID
         self.client_version = "prod-be885abbfcfe7b1f511e88b3003d9ee44757fbad"
         self.build_number = "5955942"
         self.sec_ch_ua = '"Microsoft Edge";v="143", "Chromium";v="143", "Not A(Brand";v="24"'
