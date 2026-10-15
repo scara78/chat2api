@@ -2,6 +2,7 @@
 
 import base64
 import json
+import logging
 import os
 import time
 import uuid
@@ -14,6 +15,8 @@ from config import settings
 from image_utils import SIZE_TABLE, resolve_image_size
 from token_manager import token_manager
 from web_client import WebImageClient
+
+logger = logging.getLogger("routes_images")
 
 router = APIRouter()
 
@@ -91,7 +94,11 @@ async def _create_image(body: dict[str, Any], request: Request, edit: bool = Fal
             web_model=web_model,
         )
     except Exception as e:
-        return JSONResponse(status_code=502, content={"error": {"message": str(e)}})
+        logger.exception("Image generation failed")
+        return JSONResponse(
+            status_code=502,
+            content={"error": {"message": str(e), "type": type(e).__name__}},
+        )
 
     if not assets:
         return JSONResponse(status_code=502, content={"error": {"message": "returned 0 images"}})
