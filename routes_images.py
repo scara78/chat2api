@@ -1,6 +1,7 @@
 """POST /v1/images/generations & /v1/images/edits — ChatGPT Web image generation."""
 
 import base64
+import json
 import os
 import time
 import uuid
@@ -20,15 +21,35 @@ IMAGES_DIR = os.path.join(os.path.dirname(__file__), "images")
 os.makedirs(IMAGES_DIR, exist_ok=True)
 
 
+async def _parse_body(request: Request) -> dict[str, Any] | JSONResponse:
+    raw = await request.body()
+    if not raw:
+        return JSONResponse(status_code=400, content={"error": {"message": "empty request body"}})
+    try:
+        body = json.loads(raw)
+    except json.JSONDecodeError as e:
+        return JSONResponse(
+            status_code=400,
+            content={"error": {"message": f"invalid JSON body: {e.msg} (line {e.lineno} column {e.colno})"}},
+        )
+    if not isinstance(body, dict):
+        return JSONResponse(status_code=400, content={"error": {"message": "request body must be a JSON object"}})
+    return body
+
+
 @router.post("/v1/images/generations")
 async def image_generations(request: Request):
-    body: dict[str, Any] = await request.json()
+    body = await _parse_body(request)
+    if isinstance(body, JSONResponse):
+        return body
     return await _create_image(body, request)
 
 
 @router.post("/v1/images/edits")
 async def image_edits(request: Request):
-    body: dict[str, Any] = await request.json()
+    body = await _parse_body(request)
+    if isinstance(body, JSONResponse):
+        return body
     return await _create_image(body, request, edit=True)
 
 

@@ -17,6 +17,22 @@ from web_proof import build_legacy_requirements_token, build_proof_token
 router = APIRouter()
 
 
+async def _parse_body(request: Request) -> dict[str, Any] | JSONResponse:
+    raw = await request.body()
+    if not raw:
+        return JSONResponse(status_code=400, content={"error": {"message": "empty request body"}})
+    try:
+        body = json.loads(raw)
+    except json.JSONDecodeError as e:
+        return JSONResponse(
+            status_code=400,
+            content={"error": {"message": f"invalid JSON body: {e.msg} (line {e.lineno} column {e.colno})"}},
+        )
+    if not isinstance(body, dict):
+        return JSONResponse(status_code=400, content={"error": {"message": "request body must be a JSON object"}})
+    return body
+
+
 @router.post("/v1/chat/completions")
 async def chat_completions(request: Request):
     try:
@@ -24,7 +40,9 @@ async def chat_completions(request: Request):
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": {"message": str(e)}})
 
-    body: dict[str, Any] = await request.json()
+    body = await _parse_body(request)
+    if isinstance(body, JSONResponse):
+        return body
     if "messages" not in body:
         return JSONResponse(status_code=400, content={"error": {"message": "messages is required"}})
 
