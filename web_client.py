@@ -132,10 +132,14 @@ class WebImageClient:
         if resp.status_code >= 400:
             raise Exception(f"Web prepare failed: {resp.status_code}: {resp.text[:320]}")
 
-        data = resp.json()
-        conduit = data.get("conduit_token", "")
+        try:
+            data = resp.json()
+        except Exception:
+            raise Exception(f"Web prepare returned non-JSON: {resp.text[:320]}")
+
+        conduit = _extract_conduit_token(data)
         if not conduit:
-            raise Exception("Web prepare missing conduit token")
+            raise Exception(f"Web prepare missing conduit token: {resp.text[:400]}")
         return conduit
 
     async def _start_generation(self, session, reqs: dict[str, str], conduit: str, prompt: str, model: str, refs: list[dict]) -> tuple[str, list[str], list[str], list[str], str]:
@@ -580,6 +584,25 @@ class WebImageClient:
             return False
         base_host = urlparse(self.base_url).hostname or "chatgpt.com"
         return (u.hostname or "").lower() == base_host.lower()
+
+
+def _extract_conduit_token(data: Any) -> str:
+    """从 prepare 响应中递归提取 conduit token（字段名可能变化）。"""
+    if isinstance(data, dict):
+        for key in ("conduit_token", "conduit", "conduitToken"):
+            v = data.get(key)
+            if isinstance(v, str) and v:
+                return v
+        for val in data.values():
+            found = _extract_conduit_token(val)
+            if found:
+                return found
+    elif isinstance(data, list):
+        for val in data:
+            found = _extract_conduit_token(val)
+            if found:
+                return found
+    return ""
 
 
 def _add_unique(dst: list[str], *vals: str):
