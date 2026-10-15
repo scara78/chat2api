@@ -45,6 +45,7 @@ class WebImageClient:
         """生成图片，返回 [{"url": "data:...", "mime": "image/png"}, ...]"""
         ref_images = ref_images or []
         prompt = self._build_prompt(prompt, ratio, size)
+        models = self._candidate_models(web_model)
 
         async with build_session() as session:
             # 1. Bootstrap
@@ -59,15 +60,36 @@ class WebImageClient:
                 meta = await self._upload_image(session, ref, f"image_{i + 1}.png")
                 refs.append(meta)
 
-            # 4. 生成图片
+            # 4. 生成图片（模型不可用时自动降级到 fallback 列表）
             assets: list[dict[str, Any]] = []
-            for _ in range(n):
-                if len(assets) >= n:
-                    break
-                result = await self._generate_one(session, reqs, prompt, web_model, refs)
-                assets.extend(result)
+            last_error: Exception | None = None
+            for model in models:
+                try:
+                    for _ in range(n):
+                        if len(assets) >= n:
+                            break
+                        result = await self._generate_one(session, reqs, prompt, model, refs)
+                        assets.extend(result)
+                    if assets:
+                        break
+                except Exception as e:
+                    last_error = e
+                    if not _is_model_not_found(e):
+                        raise
+
+            if not assets and last_error is not None:
+                raise last_error
 
             return assets[:n]
+
+    def _candidate_models(self, requested: str) -> list[str]:
+        """构造候选模型列表：请求模型优先，其次配置的 fallback，最后默认值。"""
+        candidates: list[str] = []
+        for m in [requested, *settings.web_image_model_fallbacks.split(","), "auto"]:
+            m = (m or "").strip()
+            if m and m not in candidates:
+                candidates.append(m)
+        return candidates
 
     async def _bootstrap(self, session):
         """模拟浏览器首次访问。"""
@@ -582,6 +604,12 @@ class WebImageClient:
             return False
         base_host = urlparse(self.base_url).hostname or "chatgpt.com"
         return (u.hostname or "").lower() == base_host.lower()
+
+
+def _is_model_not_found(err: Exception) -> bool:
+    """判断异常是否表示模型不可用，可降级到 fallback 模型。"""
+    msg = str(err).lower()
+    return "model not found" in msg or "404" in msg
 
 
 def _extract_conduit_token(data: Any) -> str:

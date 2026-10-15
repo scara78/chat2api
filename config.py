@@ -14,7 +14,8 @@ class Settings(BaseSettings):
     port: int = 8700
     timeout: int = 600
     public_url: str = ""
-    web_image_model: str = "gpt-5-5-thinking"
+    web_image_model: str = "auto"
+    web_image_model_fallbacks: str = "gpt-5-1-thinking,gpt-5-1,gpt-5-thinking,gpt-5,gpt-4o"
     web_chat_model: str = "gpt-4o"
 
     class Config:
